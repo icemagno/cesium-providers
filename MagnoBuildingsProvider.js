@@ -17,9 +17,19 @@
     */
 
 var MagnoEmptyProvider = function MagnoEmptyProvider(options) {
-	options = Cesium.defaultValue(options, Cesium.defaultValue.EMPTY_OBJECT);    
+    
+    if ( !Cesium.defined(options) ) {
+        throw new DeveloperError("options is required.");
+	}    
+    
+    if ( !Cesium.defined( options.viewer ) ) {
+        throw new DeveloperError("options.viewer is required.");
+    }    
+    
     this._requestImage = Cesium.defaultValue(options.requestImage, null );
+    this._requestFeatures = Cesium.defaultValue(options.requestFeatures, null );
     this._minimumLevel = Cesium.defaultValue(options.minimumLevel, 0);
+    this._activationLevel = Cesium.defaultValue(options.activationLevel, 17);
     this._maximumLevel = Cesium.defaultValue(options.maximumLevel, 22);
     this._tilingScheme = Cesium.defined(options.tilingScheme) ? options.tilingScheme : new Cesium.GeographicTilingScheme({ ellipsoid: options.ellipsoid });
     this._color = Cesium.defaultValue(options.color, Cesium.Color.YELLOW);
@@ -28,9 +38,18 @@ var MagnoEmptyProvider = function MagnoEmptyProvider(options) {
     this._tileHeight = Cesium.defaultValue(options.tileHeight, 256);
     this._readyPromise = Cesium.when.resolve(true);
     this._debugTiles =  Cesium.defaultValue(options.debugTiles, false);
+    this._viewer =  options.viewer;
+    this._localCache = {};
 }
 
 Cesium.defineProperties(MagnoEmptyProvider.prototype, {
+	
+    localCache : {
+        get : function() {
+            return this._localCache;
+        }
+    },
+	
 	
     /**
      * Gets the proxy used by this provider.
@@ -274,12 +293,42 @@ MagnoEmptyProvider.prototype.requestImage = function (x, y, level, request) {
 	    context.strokeRect(1, 1, 255, 255);
 	}
 	
+	// Cache
+	// https://github.com/CesiumGS/cesium/blob/43571bab35ff6f5e197a28126f85f7ccb5c4999a/Source/Scene/TimeDynamicImagery.js#L270
+
+	if( level >= this._activationLevel ){
+		this.requestFeatures( x, y, level, bbox );
+	}
+	
 	if( Cesium.defined( this._requestImage ) ){
 		var newCanvas = this._requestImage( x, y, level, request, bbox, canvas );
 		if( newCanvas ) canvas = newCanvas;
 	}
 	
     return canvas;
+};
+
+
+MagnoEmptyProvider.prototype.requestFeatures = function ( x, y, level, bbox ) {
+
+/*
+	for( x=0; x < this._viewer.imageryLayers.length; x++){
+    	console.log( this._viewer.imageryLayers.get(x) );
+    }
+    
+    imageryLayer._imageryCache 
+	var key = JSON.stringify([x, y, level]);    
+*/
+	
+	if( Cesium.defined( this._requestFeatures ) ){
+		this._requestFeatures( x, y, level, bbox, this.whenFeaturesAcquired );
+	}
+};
+
+MagnoEmptyProvider.prototype.whenFeaturesAcquired = function ( features ) {
+	var data = features.properties['imageryData'];
+	console.log( data );
+	
 };
 
 
