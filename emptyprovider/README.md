@@ -14,13 +14,13 @@ var imageryLayer = viewer.imageryLayers.addImageryProvider( magnoProvider );
 Some tile creation examples:
 
 1) Draw a single image:
-
+```
 const image = document.getElementById('myImage');
 function requestTileImage( x, y, level, request, bbox, canvas ){
    	canvas.getContext('2d').drawImage(image, 5, 5);
     return canvas;
 }
-
+```
 2) Draw something:
 
 ```
