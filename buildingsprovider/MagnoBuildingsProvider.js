@@ -3,7 +3,7 @@
     * a label inside it indicating the X, Y, Level coordinates of the tile.  This is mostly useful for
     * debugging terrain and imagery rendering problems.
     *
-    * @alias MagnoEmptyProvider
+    * @alias MagnoBuildingsProvider
     * @constructor
     *
     * @param {Object} [options] Object with the following properties:
@@ -16,7 +16,7 @@
     * @param {Number} [options.tileHeight=256] The height of the tile for level-of-detail selection purposes.
     */
 
-var MagnoEmptyProvider = function MagnoEmptyProvider(options) {
+var MagnoBuildingsProvider = function MagnoBuildingsProvider(options) {
     
     if ( !Cesium.defined(options) ) {
         throw new DeveloperError("options is required.");
@@ -26,8 +26,11 @@ var MagnoEmptyProvider = function MagnoEmptyProvider(options) {
         throw new DeveloperError("options.viewer is required.");
     }    
     
-    this._requestImage = Cesium.defaultValue(options.requestImage, null );
-    this._requestFeatures = Cesium.defaultValue(options.requestFeatures, null );
+    if ( !Cesium.defined( options.sourceUrl ) ) {
+        throw new DeveloperError("options.sourceUrl is required.");
+    }    
+
+    this._sourceUrl = options.sourceUrl;
     this._minimumLevel = Cesium.defaultValue(options.minimumLevel, 0);
     this._activationLevel = Cesium.defaultValue(options.activationLevel, 17);
     this._maximumLevel = Cesium.defaultValue(options.maximumLevel, 22);
@@ -37,12 +40,30 @@ var MagnoEmptyProvider = function MagnoEmptyProvider(options) {
     this._tileWidth = Cesium.defaultValue(options.tileWidth, 256);
     this._tileHeight = Cesium.defaultValue(options.tileHeight, 256);
     this._readyPromise = Cesium.when.resolve(true);
+    this._featuresPerTile = Cesium.defaultValue(options.featuresPerTile, 200);
     this._debugTiles =  Cesium.defaultValue(options.debugTiles, false);
     this._viewer =  options.viewer;
     this._localCache = {};
+    this._imageryCache = null;
+    this._whenFeaturesAcquired = null;
+    this._name = "MagnoBuildingsProvider"; 
+    
+    /*
+    var that = this;
+    this._clock = setInterval( function( ){ 
+    	if( that._imageryCache ) console.log( Object.keys( that._imageryCache ).length  ); 
+    }, 1000 );    
+    */
 }
 
-Cesium.defineProperties(MagnoEmptyProvider.prototype, {
+Cesium.defineProperties(MagnoBuildingsProvider.prototype, {
+
+	
+	name : {
+		get : function() {
+			return this._name;
+		}
+	},
 	
     localCache : {
         get : function() {
@@ -234,14 +255,14 @@ Cesium.defineProperties(MagnoEmptyProvider.prototype, {
  *
  * @exception {DeveloperError} <code>getTileCredits</code> must not be called before the imagery provider is ready.
  */
-MagnoEmptyProvider.prototype.getTileCredits = function (x, y, level) {
+MagnoBuildingsProvider.prototype.getTileCredits = function (x, y, level) {
     return undefined;
 };
 
 
 /**
  * Requests the image for a given tile.  This function should
- * not be called before {@link MagnoEmptyProvider#ready} returns true.
+ * not be called before {@link MagnoBuildingsProvider#ready} returns true.
  *
  * @param {Number} x The tile X coordinate.
  * @param {Number} y The tile Y coordinate.
@@ -252,9 +273,10 @@ MagnoEmptyProvider.prototype.getTileCredits = function (x, y, level) {
  *          should be retried later.  The resolved image may be either an
  *          Image or a Canvas DOM object.
  */
-MagnoEmptyProvider.prototype.requestImage = function (x, y, level, request) {
+MagnoBuildingsProvider.prototype.requestImage = function (x, y, level, request) {
     var interval = 180.0 / Math.pow(2, level);
-
+    var key = "id-" + x + "-" + y + "-" + level;
+    
     var lon = x * interval-180;
     var lat = 90 - y * interval;
     var nwCorner = {};
@@ -283,6 +305,7 @@ MagnoEmptyProvider.prototype.requestImage = function (x, y, level, request) {
     bbox.swCorner = swCorner;
     
     var canvas = document.createElement('canvas');
+    canvas.id = key;
     canvas.width = 256;
     canvas.height = 256;
     
@@ -293,42 +316,112 @@ MagnoEmptyProvider.prototype.requestImage = function (x, y, level, request) {
 	    context.strokeRect(1, 1, 255, 255);
 	}
 	
-	// Cache
-	// https://github.com/CesiumGS/cesium/blob/43571bab35ff6f5e197a28126f85f7ccb5c4999a/Source/Scene/TimeDynamicImagery.js#L270
-
 	if( level >= this._activationLevel ){
 		this.requestFeatures( x, y, level, bbox );
-	}
-	
-	if( Cesium.defined( this._requestImage ) ){
-		var newCanvas = this._requestImage( x, y, level, request, bbox, canvas );
-		if( newCanvas ) canvas = newCanvas;
 	}
 	
     return canvas;
 };
 
 
-MagnoEmptyProvider.prototype.requestFeatures = function ( x, y, level, bbox ) {
+MagnoBuildingsProvider.prototype.requestFeatures = function ( x, y, level, bbox ) {
 
-/*
-	for( x=0; x < this._viewer.imageryLayers.length; x++){
-    	console.log( this._viewer.imageryLayers.get(x) );
-    }
-    
-    imageryLayer._imageryCache 
-	var key = JSON.stringify([x, y, level]);    
-*/
 	
-	if( Cesium.defined( this._requestFeatures ) ){
-		this._requestFeatures( x, y, level, bbox, this.whenFeaturesAcquired );
-	}
+	if( !this._imageryCache ){
+		for( x=0; x < this._viewer.imageryLayers.length; x++){
+			var layer = this._viewer.imageryLayers.get(x);
+			var provider = layer.imageryProvider;
+			if( provider.name === this._name ){
+				this._imageryCache = layer._imageryCache;
+				break;
+			}
+	    }
+	} 
+	
+	this.loadFeatures( x, y, level, bbox );
+    
+    
 };
 
-MagnoEmptyProvider.prototype.whenFeaturesAcquired = function ( features ) {
-	var data = features.properties['imageryData'];
-	console.log( data );
+
+MagnoBuildingsProvider.prototype.loadFeatures = function( x, y, level, bbox ){
+	var that = this;
 	
+	
+	//var url = "http://sisgeodef.defesa.mil.br:36215/buildings?l={l}&r={r}&t={t}&b={b}";
+
+	var url = this._sourceUrl.replace("{l}", bbox.swCorner.lon).
+	replace("{r}", bbox.neCorner.lon).
+	replace("{t}", bbox.neCorner.lat).
+	replace("{b}", bbox.swCorner.lat) + "&count=" + this._featuresPerTile;
+	 
+	/*
+	var url = "http://sisgeodef.defesa.mil.br:36215/buildings?l=" + bbox.swCorner.lon + 
+		"&r=" + bbox.neCorner.lon + 
+		"&t=" + bbox.neCorner.lat + 
+		"&b=" + bbox.swCorner.lat + 
+		"&count=" + this._featuresPerTile;
+	*/
+	
+	var promise = Cesium.GeoJsonDataSource.load( url );
+	promise.then(function( dataSource ) {
+		var entities = dataSource.entities.values;
+		if( entities != null ){
+			
+			that._viewer.dataSources.add( dataSource );
+			var terrainSamplePositions = [];
+			
+			for (var i = 0; i < entities.length; i++) {
+				
+				var entity = entities[i];
+				var imageryData = {};
+				imageryData.x = x;
+				imageryData.y = y;
+				imageryData.level = level;
+				entity.properties['imageryData'] = imageryData;
+				
+		        var position = entity.polygon.hierarchy.getValue().positions[0];
+		        terrainSamplePositions.push( Cesium.Cartographic.fromCartesian(position) );
+			}
+			
+			if( terrainSamplePositions.length > 0 )	{
+			    Cesium.when(Cesium.sampleTerrainMostDetailed( that._viewer.terrainProvider, terrainSamplePositions ), function() {
+			    	
+			        for (var i = 0; i < entities.length; i++) {
+			            var entity = entities[i];
+			            var terrainHeight = terrainSamplePositions[i].height;
+			            entity.polygon.height = terrainHeight;
+			            var height = parseFloat( entity.properties['height'].getValue() );
+			            var extrudeVal = height + terrainHeight;
+				        entity.polygon.material = Cesium.Color.GAINSBORO; //.withAlpha(0.9);
+				        entity.polygon.outlineColor = Cesium.Color.BLACK;
+				        entity.polygon.fill = true;
+				        entity.polygon.height = 0;
+				        entity.polygon.extrudedHeight = extrudeVal;
+			        }
+			        
+			        if( that._whenFeaturesAcquired != null )  that._whenFeaturesAcquired( entities );
+			    });
+			}
+			
+		} else {
+			console.log( "Erro" );
+		}
+		
+	}).otherwise(function(error){
+		console.log( error );
+	});
+
+};
+
+
+MagnoBuildingsProvider.prototype.whenFeaturesAcquired = function ( entities ) {
+	/*
+    for (var i = 0; i < entities.length; i++) {
+        var entity = entities[i];
+        console.log( entity.properties.imageryData );
+    } 
+    */   
 };
 
 
@@ -347,11 +440,11 @@ MagnoEmptyProvider.prototype.whenFeaturesAcquired = function ( features ) {
  *                   instances.  The array may be empty if no features are found at the given location.
  *                   It may also be undefined if picking is not supported.
  */
-MagnoEmptyProvider.prototype.pickFeatures = function (x, y, level, longitude, latitude) {
+MagnoBuildingsProvider.prototype.pickFeatures = function (x, y, level, longitude, latitude) {
 	console.log( "Pick at " + longitude + "," + latitude );
     return undefined;
 };
 
-MagnoEmptyProvider._endpointCache = {};
+MagnoBuildingsProvider._endpointCache = {};
 
 
