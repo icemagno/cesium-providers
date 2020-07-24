@@ -17,6 +17,8 @@ var buildingsProvider = new MagnoBuildingsProvider({
 
 viewer.imageryLayers.addImageryProvider( buildingsProvider );
 ```
+When L,R,T and B are tile coordinates from Left,Right,Top and Bottom. The provider will calculate the correct corrdinates and replace the variables to call your endpoint wich need to provide Features from that box. 
+
 
 You can check the expected format in the attached json file but it is basicaly an OSM polygon and the height attribute. You can send other attributes if you want but you MUST send height (as string or real)
 ```
