@@ -77,4 +77,37 @@ You can check the expected format in the attached json file but it is basicaly a
 }
 ```
 
+You can use this query as example to take your polygons directly from OSM database:
+
+```
+CREATE OR REPLACE FUNCTION public.getbuildings( quantos integer, xmin double precision, ymin double precision, xmax double precision, ymax double precision)
+RETURNS json as
+$func$   
+select row_to_json(fc)
+from (
+    select
+        'FeatureCollection' as "type",
+        array_to_json(array_agg(f)) as "features"
+    from (
+        select
+            'Feature' as "type",
+            ST_AsGeoJSON(ST_Transform(way, 4326), 6) :: json as "geometry",
+            (
+                select json_strip_nulls(row_to_json(t))
+                from (
+                    select
+                        osm_id,
+                        alt as height
+                ) t
+            ) as "properties"
+        from planet_osm_polygon
+        where public.planet_osm_polygon.way && ST_MakeEnvelope($2, $3, $4, $5, 4326)
+        limit $1
+    ) as f
+) as fc;
+$func$ LANGUAGE sql STABLE STRICT;
+```
+
+
+
 
