@@ -18,7 +18,7 @@ var buildingsProvider = new MagnoBuildingsProvider({
 viewer.imageryLayers.addImageryProvider( buildingsProvider );
 ```
 
-You can check the expected format in the attached json file.
+You can check the expected format in the attached json file but it is basicaly a OSM data with the polygon Geometry and the height attribute. You can send other attributes if you want but you MUST send height (as string or real)
 
 
 
