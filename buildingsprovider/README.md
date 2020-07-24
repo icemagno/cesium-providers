@@ -1,6 +1,9 @@
 # BuildingsProvider
 A provider to load GeoJson from a database and draw 3D polygons 
 
+![alt text](https://github.com/icemagno/cesium-providers/blob/master/buildingsprovider/screen.jpg?raw=true)
+
+
 ```
 var url = "http://<YOUR_ENDPOINT>/?l={l}&r={r}&t={t}&b={b}";
 
