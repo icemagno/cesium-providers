@@ -3,7 +3,7 @@
     * a label inside it indicating the X, Y, Level coordinates of the tile.  This is mostly useful for
     * debugging terrain and imagery rendering problems.
     *
-    * @alias MagnoBuildingsProvider
+    * @alias MagnoPointCloudProvider
     * @constructor
     *
     * @param {Object} [options] Object with the following properties:
@@ -16,7 +16,7 @@
     * @param {Number} [options.tileHeight=256] The height of the tile for level-of-detail selection purposes.
     */
 
-var MagnoBuildingsProvider = function MagnoBuildingsProvider(options) {
+var MagnoPointCloudProvider = function MagnoPointCloudProvider(options) {
     
     if ( !Cesium.defined(options) ) {
         throw new DeveloperError("options is required.");
@@ -46,7 +46,7 @@ var MagnoBuildingsProvider = function MagnoBuildingsProvider(options) {
     this._localCache = {};
     this._imageryCache = null;
     this._whenFeaturesAcquired = null;
-    this._name = "MagnoBuildingsProvider"; 
+    this._name = "MagnoPointCloudProvider"; 
     
     /*
     var that = this;
@@ -56,7 +56,7 @@ var MagnoBuildingsProvider = function MagnoBuildingsProvider(options) {
     */
 }
 
-Cesium.defineProperties(MagnoBuildingsProvider.prototype, {
+Cesium.defineProperties(MagnoPointCloudProvider.prototype, {
 
 	
 	name : {
@@ -255,14 +255,14 @@ Cesium.defineProperties(MagnoBuildingsProvider.prototype, {
  *
  * @exception {DeveloperError} <code>getTileCredits</code> must not be called before the imagery provider is ready.
  */
-MagnoBuildingsProvider.prototype.getTileCredits = function (x, y, level) {
+MagnoPointCloudProvider.prototype.getTileCredits = function (x, y, level) {
     return undefined;
 };
 
 
 /**
  * Requests the image for a given tile.  This function should
- * not be called before {@link MagnoBuildingsProvider#ready} returns true.
+ * not be called before {@link MagnoPointCloudProvider#ready} returns true.
  *
  * @param {Number} x The tile X coordinate.
  * @param {Number} y The tile Y coordinate.
@@ -273,7 +273,7 @@ MagnoBuildingsProvider.prototype.getTileCredits = function (x, y, level) {
  *          should be retried later.  The resolved image may be either an
  *          Image or a Canvas DOM object.
  */
-MagnoBuildingsProvider.prototype.requestImage = function (x, y, level, request) {
+MagnoPointCloudProvider.prototype.requestImage = function (x, y, level, request) {
     var interval = 180.0 / Math.pow(2, level);
     var key = "id-" + x + "-" + y + "-" + level;
     
@@ -324,7 +324,7 @@ MagnoBuildingsProvider.prototype.requestImage = function (x, y, level, request) 
 };
 
 
-MagnoBuildingsProvider.prototype.requestFeatures = function ( x, y, level, bbox ) {
+MagnoPointCloudProvider.prototype.requestFeatures = function ( x, y, level, bbox ) {
 
 	
 	if( !this._imageryCache ){
@@ -344,7 +344,7 @@ MagnoBuildingsProvider.prototype.requestFeatures = function ( x, y, level, bbox 
 };
 
 
-MagnoBuildingsProvider.prototype.loadFeatures = function( x, y, level, bbox ){
+MagnoPointCloudProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 	var that = this;
 	
 	
@@ -358,42 +358,29 @@ MagnoBuildingsProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 	var promise = Cesium.GeoJsonDataSource.load( url );
 	promise.then(function( dataSource ) {
 		var entities = dataSource.entities.values;
+		
 		if( entities != null ){
-			
-			that._viewer.dataSources.add( dataSource );
 			var terrainSamplePositions = [];
-			
 			for (var i = 0; i < entities.length; i++) {
-				
 				var entity = entities[i];
 				var imageryData = {};
 				imageryData.x = x;
 				imageryData.y = y;
 				imageryData.level = level;
 				entity.properties['imageryData'] = imageryData;
-				
-		        var position = entity.polygon.hierarchy.getValue().positions[0];
-		        terrainSamplePositions.push( Cesium.Cartographic.fromCartesian(position) );
-			}
-			
-			if( terrainSamplePositions.length > 0 )	{
-			    Cesium.when(Cesium.sampleTerrainMostDetailed( that._viewer.terrainProvider, terrainSamplePositions ), function() {
-			    	
-			        for (var i = 0; i < entities.length; i++) {
-			            var entity = entities[i];
-			            var terrainHeight = terrainSamplePositions[i].height;
-			            entity.polygon.height = terrainHeight;
-			            var height = parseFloat( entity.properties['height'].getValue() );
-			            var extrudeVal = height + terrainHeight;
-				        entity.polygon.material = Cesium.Color.GAINSBORO; //.withAlpha(0.9);
-				        entity.polygon.outlineColor = Cesium.Color.BLACK;
-				        entity.polygon.fill = true;
-				        entity.polygon.height = 0;
-				        entity.polygon.extrudedHeight = extrudeVal;
-			        }
-			        
-			        if( that._whenFeaturesAcquired != null )  that._whenFeaturesAcquired( entities );
-			    });
+		        var position = entity.position;
+		        
+		        var newEntity = entity.ellipsoid = viewer.entities.add({
+		        	name: "ponto",
+		        	position: position,
+		        	ellipsoid: {
+		        	  radii: new Cesium.Cartesian3(1.0, 1.0, 1.0),
+		        	  material: Cesium.Color.RED.withAlpha(0.5),
+		        	  outline: true,
+		        	  outlineColor: Cesium.Color.BLACK,
+		        	},
+		       });
+		       
 			}
 			
 		} else {
@@ -407,7 +394,7 @@ MagnoBuildingsProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 };
 
 
-MagnoBuildingsProvider.prototype.whenFeaturesAcquired = function ( entities ) {
+MagnoPointCloudProvider.prototype.whenFeaturesAcquired = function ( entities ) {
 	/*
     for (var i = 0; i < entities.length; i++) {
         var entity = entities[i];
@@ -432,8 +419,8 @@ MagnoBuildingsProvider.prototype.whenFeaturesAcquired = function ( entities ) {
  *                   instances.  The array may be empty if no features are found at the given location.
  *                   It may also be undefined if picking is not supported.
  */
-MagnoBuildingsProvider.prototype.pickFeatures = function (x, y, level, longitude, latitude) {
-	console.log( "Pick at " + longitude + "," + latitude );
+MagnoPointCloudProvider.prototype.pickFeatures = function (x, y, level, longitude, latitude) {
     return undefined;
 };
+
 
