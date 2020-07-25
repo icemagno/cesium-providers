@@ -1,6 +1,12 @@
 # BuildingsProvider
 A provider to load GeoJson from a database and draw 3D polygons 
 
+What's next?
+- Can send the level to the database query to load only buildings of a certain height. So we can avoid to load small buildings at a far distance.
+- Can create some cool properties to increase the buildings style.
+- Can create a SVG/PNG attribute to paint something on the ground ( in original tile canvas ).
+- Can send other geometries as GeoJSON properties to create more structures per building.
+
 ![alt text](https://github.com/icemagno/cesium-providers/blob/master/buildingsprovider/screen.jpg?raw=true)
 
 
