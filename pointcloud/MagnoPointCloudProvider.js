@@ -45,7 +45,7 @@ var MagnoPointCloudProvider = function MagnoPointCloudProvider(options) {
     this._viewer =  options.viewer;
     this._localCache = {};
     this._imageryCache = null;
-    this._whenFeaturesAcquired = null;
+    this._onWhenFeaturesAcquired = Cesium.defaultValue(options.whenFeaturesAcquired, null);
     this._name = "MagnoPointCloudProvider"; 
     
     /*
@@ -382,6 +382,8 @@ MagnoPointCloudProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 		       });
 		       
 			}
+			
+			if( that._onWhenFeaturesAcquired != null )  that._onWhenFeaturesAcquired( entities );
 			
 		} else {
 			console.log( "Erro" );

@@ -45,7 +45,7 @@ var MagnoBuildingsProvider = function MagnoBuildingsProvider(options) {
     this._viewer =  options.viewer;
     this._localCache = {};
     this._imageryCache = null;
-    this._whenFeaturesAcquired = null;
+    this._onWhenFeaturesAcquired = Cesium.defaultValue(options.whenFeaturesAcquired, null);
     this._name = "MagnoBuildingsProvider"; 
     
     /*
@@ -325,6 +325,7 @@ MagnoBuildingsProvider.prototype.requestImage = function (x, y, level, request) 
 
 
 MagnoBuildingsProvider.prototype.requestFeatures = function ( x, y, level, bbox ) {
+	var that = this;
 
 	
 	if( !this._imageryCache ){
@@ -338,23 +339,14 @@ MagnoBuildingsProvider.prototype.requestFeatures = function ( x, y, level, bbox 
 	    }
 	} 
 	
-	this.loadFeatures( x, y, level, bbox );
-    
-    
-};
-
-
-MagnoBuildingsProvider.prototype.loadFeatures = function( x, y, level, bbox ){
-	var that = this;
-	
-	
-	//var url = "http://sisgeodef.defesa.mil.br:36215/buildings?l={l}&r={r}&t={t}&b={b}";
 
 	var url = this._sourceUrl.replace("{l}", bbox.swCorner.lon).
 	replace("{r}", bbox.neCorner.lon).
 	replace("{t}", bbox.neCorner.lat).
 	replace("{b}", bbox.swCorner.lat) + "&count=" + this._featuresPerTile;
-	 
+
+	console.log( url );
+	
 	var promise = Cesium.GeoJsonDataSource.load( url );
 	promise.then(function( dataSource ) {
 		var entities = dataSource.entities.values;
@@ -392,7 +384,7 @@ MagnoBuildingsProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 				        entity.polygon.extrudedHeight = extrudeVal;
 			        }
 			        
-			        if( that._whenFeaturesAcquired != null )  that._whenFeaturesAcquired( entities );
+			        if( that._onWhenFeaturesAcquired != null )  that._onWhenFeaturesAcquired( entities );
 			    });
 			}
 			
