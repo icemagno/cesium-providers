@@ -358,33 +358,60 @@ MagnoPointCloudProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 	var promise = Cesium.GeoJsonDataSource.load( url );
 	promise.then(function( dataSource ) {
 		var entities = dataSource.entities.values;
-		
 		if( entities != null ){
 			var terrainSamplePositions = [];
+			var points = that._viewer.scene.primitives.add( new Cesium.PointPrimitiveCollection() );
+			var minAlt = 99999;
 			for (var i = 0; i < entities.length; i++) {
 				var entity = entities[i];
-				var imageryData = {};
-				imageryData.x = x;
-				imageryData.y = y;
-				imageryData.level = level;
-				entity.properties['imageryData'] = imageryData;
-		        var position = entity.position;
-		        
-		        var newEntity = entity.ellipsoid = viewer.entities.add({
-		        	name: "ponto",
-		        	position: position,
-		        	ellipsoid: {
-		        	  radii: new Cesium.Cartesian3(1.0, 1.0, 1.0),
-		        	  material: Cesium.Color.RED.withAlpha(0.5),
-		        	  outline: true,
-		        	  outlineColor: Cesium.Color.BLACK,
-		        	},
-		       });
-		       
+				var position = entity.position._value;
+				var cartesian = Cesium.Cartesian3.fromElements( position.x, position.y, position.z );
+				
+				try {
+					terrainSamplePositions.push( Cesium.Cartographic.fromCartesian( cartesian ) );
+					var cartographic = Cesium.Cartographic.fromCartesian( cartesian );
+			    	var longitude = Cesium.Math.toDegrees(cartographic.longitude);
+			    	var latitude = Cesium.Math.toDegrees(cartographic.latitude);
+			    	var height = cartographic.height;
+					
+					var data = entity.properties['data'].getValue();
+					var intensity = data[0];
+					var zNorm = ( intensity - 292) / (1164 - 292) ;
+					if( zNorm < 0 ) zNorm = 0;
+					
+					if( height < minAlt ) minAlt = height;
+					
+			        var position = cartesian;
+					points.add({
+					  position : position,
+					  pixelSize: 1.0,
+					  color : Cesium.Color.GAINSBORO.withAlpha( zNorm ),
+					  //heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+				      //disableDepthTestDistance: Number.POSITIVE_INFINITY,				  
+				      //translucencyByDistance : new Cesium.NearFarScalar(1.5e2, 1.0, 8.0e6, 0.0),
+					}).customId = [longitude, latitude, height];
+			    	
+				} catch (e) {
+					console.log( e );
+				}				
+				
 			}
 			
-			if( that._onWhenFeaturesAcquired != null )  that._onWhenFeaturesAcquired( entities );
 			
+			if(  entities.length > 0 ) {
+		        Cesium.when(Cesium.sampleTerrainMostDetailed( that._viewer.terrainProvider, terrainSamplePositions ), function() {
+			        for (var i = 0; i < terrainSamplePositions.length; i++) {
+			            //var cartographic = terrainSamplePositions[i];
+						//var terrainHeight = cartographic.height;
+						var height = points.get(i).customId[2];
+						var newHeight = ( height - minAlt ) + 1;
+						var newPosition = Cesium.Cartesian3.fromDegrees( points.get(i).customId[0], points.get(i).customId[1], newHeight );	
+						points.get(i).position = newPosition;
+			        }
+			    });
+			}			
+			
+
 		} else {
 			console.log( "Erro" );
 		}
