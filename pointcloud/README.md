@@ -1,8 +1,11 @@
 # PointCloudProvider
 A provider to load GeoJson from a database and draw pointclouds
 
-![alt text](https://github.com/icemagno/cesium-providers/blob/master/buildingsprovider/screen.jpg?raw=true)
+It works with pgPointCloud databases, reading vector points as GeoJSON and sending them to the provider.
 
+![alt text](https://github.com/icemagno/cesium-providers/blob/master/pointcloud/screen.jpg?raw=true)
+
+https://youtu.be/OEbfyxOjb7g
 
 ```
 var url = "http://<YOUR_ENDPOINT>/?l={l}&r={r}&t={t}&b={b}";
@@ -12,7 +15,7 @@ var cloudProvider = new MagnoPointCloudProvider({
 	viewer : viewer,
 	activationLevel : 17,
 	sourceUrl : url,
-	featuresPerTile : 200,
+	featuresPerTile : 2000,
 	whenFeaturesAcquired : function( entities ){
 		console.log( entities.length + " points received." );
 	}
@@ -22,65 +25,30 @@ viewer.imageryLayers.addImageryProvider( cloudProvider );
 ```
 When L,R,T and B are tile coordinates from Left,Right,Top and Bottom. The provider will calculate the correct corrdinates and replace the variables to call your endpoint wich need to provide Features from that box. 
 
+`featuresPerTile` actualy works as a detail controller because it will gives you a kind of "points per cube". As you go deep in level, the cube (tile) is smaller and density will increase.
 
-You can check the expected format in the attached json file but it is basicaly an OSM polygon and the height attribute. You can send other attributes if you want but you MUST send height (as string or real)
-```
-{
-  "features": [
-    {
-      "geometry": {
-        "coordinates": [
-          [
-            [
-              -43.208993,
-              -22.909676
-            ],
-            [
-              -43.208888,
-              -22.909805
-            ],
-            [
-              -43.208823,
-              -22.909761
-            ],
-            [
-              -43.208856,
-              -22.909717
-            ],
-            [
-              -43.208893,
-              -22.909669
-            ],
-            [
-              -43.208923,
-              -22.909631
-            ],
-            [
-              -43.208948,
-              -22.909647
-            ],
-            [
-              -43.208993,
-              -22.909676
-            ]
-          ]
-        ],
-        "type": "Polygon"
-      },
-      "type": "Feature",
-      "properties": {
-        "osm_id": 434833218,
-        "height": 5.1999898
-      }
-    }
-  ]
-}
-```
 
-You can use this query as example to take your polygons directly from OSM database:
+This functions will help you to provide the points from your database:
 
 ```
-CREATE OR REPLACE FUNCTION public.getbuildings( quantos integer, xmin double precision, ymin double precision, xmax double precision, ymax double precision)
+CREATE OR REPLACE FUNCTION public.getpoints( xmin double precision, ymin double precision, xmax double precision, ymax double precision, quantos integer)
+returns table ( ppp pcpoint ) 
+language plpgsql
+as $$
+begin
+  return query 
+	WITH
+	patches AS (
+		SELECT pa FROM congonhas where pa::geometry && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+	),
+	pa_pts AS (
+		SELECT PC_Explode(pa) AS ppp FROM patches 
+	)
+	select * from pa_pts;
+end; $$ 
+
+
+CREATE OR REPLACE FUNCTION public.getpcloud( quantos integer, xmin double precision, ymin double precision, xmax double precision, ymax double precision)
 RETURNS json as
 $func$   
 select row_to_json(fc)
@@ -89,24 +57,17 @@ from (
         'FeatureCollection' as "type",
         array_to_json(array_agg(f)) as "features"
     from (
-        select
-            'Feature' as "type",
-            ST_AsGeoJSON(ST_Transform(way, 4326), 6) :: json as "geometry",
-            (
-                select json_strip_nulls(row_to_json(t))
-                from (
-                    select
-                        osm_id,
-                        alt as height
-                ) t
-            ) as "properties"
-        from planet_osm_polygon
-        where public.planet_osm_polygon.way && ST_MakeEnvelope($2, $3, $4, $5, 4326)
-        limit $1
+		select
+		'Feature' as "type",
+        ST_AsGeoJSON(ST_Transform( ppp::geometry, 4326), 6) :: json as "geometry",
+		json_build_object('data', array_to_json( PC_Get(ppp) ) ) as "properties"
+        from getpoints(  $2, $3, $4, $5, $1  ) order by random() limit $1
     ) as f
-) as fc;
+) as fc;	
 $func$ LANGUAGE sql STABLE STRICT;
 ```
+
+
 
 
 
