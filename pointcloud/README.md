@@ -28,7 +28,8 @@ When L,R,T and B are tile coordinates from Left,Right,Top and Bottom. The provid
 `featuresPerTile` actualy works as a detail controller because it will gives you a kind of "points per cube". As you go deep in level, the cube (tile) is smaller and density will increase.
 
 
-This functions will help you to provide the points from your database:
+This functions will help you to provide the points from your database: 
+WARNING: This functions are too coupled to a specific table (congonhas in this case). Change it to feet your needs.
 
 ```
 CREATE OR REPLACE FUNCTION public.getpoints( xmin double precision, ymin double precision, xmax double precision, ymax double precision, quantos integer)
