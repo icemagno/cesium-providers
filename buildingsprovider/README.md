@@ -9,6 +9,7 @@ What's next?
 
 ![alt text](https://github.com/icemagno/cesium-providers/blob/master/buildingsprovider/screen.jpg?raw=true)
 
+https://www.youtube.com/watch?v=XXd3EUL_gK4
 
 ```
 var url = "http://<YOUR_ENDPOINT>/?l={l}&r={r}&t={t}&b={b}";
