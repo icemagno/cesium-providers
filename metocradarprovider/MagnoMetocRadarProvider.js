@@ -47,16 +47,9 @@ var MagnoMetocRadarProvider = function MagnoMetocRadarProvider(options) {
     this._imageryCache = null;
     this._onWhenFeaturesAcquired = Cesium.defaultValue(options.whenFeaturesAcquired, null);
     this._name = "MagnoMetocRadarProvider"; 
-    
-    /*
-    var that = this;
-    this._clock = setInterval( function( ){ 
-    	if( that._imageryCache ) console.log( Object.keys( that._imageryCache ).length  ); 
-    }, 1000 );    
-    */
 }
 
-Cesium.defineProperties(MagnoMetocRadarProvider.prototype, {
+Object.defineProperties( MagnoMetocRadarProvider.prototype, {
 
 	
 	name : {
@@ -345,21 +338,25 @@ MagnoMetocRadarProvider.prototype.requestFeatures = function ( x, y, level, bbox
 
 
 MagnoMetocRadarProvider.prototype.loadFeatures = function( x, y, level, bbox ){
+	// http://sisgeodef.defesa.mil.br/radar?l=-50.625&r=-45&t=5.625&b=0&count=200
+	
 	var that = this;
 	
-	
-	//var url = "http://sisgeodef.defesa.mil.br:36215/buildings?l={l}&r={r}&t={t}&b={b}";
-
 	var url = this._sourceUrl.replace("{l}", bbox.swCorner.lon).
 	replace("{r}", bbox.neCorner.lon).
 	replace("{t}", bbox.neCorner.lat).
 	replace("{b}", bbox.swCorner.lat) + "&count=" + this._featuresPerTile;
 	 
 	var promise = Cesium.GeoJsonDataSource.load( url );
-	promise.then(function( dataSource ) {
+	promise.then( function( dataSource ) {
 		var entities = dataSource.entities.values;
+		if( (entities != null) && ( entities.length > 0 ) ){
+			console.log( url );
+			that._viewer.dataSources.add( dataSource );
+			if (that._onWhenFeaturesAcquired )  that._onWhenFeaturesAcquired( entities );
+		}
+		/*
 		if( entities != null ){
-			var terrainSamplePositions = [];
 			var points = that._viewer.scene.primitives.add( new Cesium.PointPrimitiveCollection() );
 			var minAlt = 99999;
 			for (var i = 0; i < entities.length; i++) {
@@ -410,12 +407,10 @@ MagnoMetocRadarProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 			        }
 			    });
 			}			
-			
-
 		} else {
 			console.log( "Erro" );
 		}
-		
+		*/	
 	}).otherwise(function(error){
 		console.log( error );
 	});
