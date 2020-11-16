@@ -56,7 +56,7 @@ var MagnoBuildingsProvider = function MagnoBuildingsProvider(options) {
     */
 }
 
-Cesium.defineProperties(MagnoBuildingsProvider.prototype, {
+Object.defineProperties(MagnoBuildingsProvider.prototype, {
 
 	
 	name : {

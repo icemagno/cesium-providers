@@ -47,6 +47,12 @@ var MagnoMetocRadarProvider = function MagnoMetocRadarProvider(options) {
     this._imageryCache = null;
     this._onWhenFeaturesAcquired = Cesium.defaultValue(options.whenFeaturesAcquired, null);
     this._name = "MagnoMetocRadarProvider"; 
+	this._rampStart = Cesium.defaultValue(options.rampStart, '#000000');
+	this._rampEnd = Cesium.defaultValue(options.rampEnd, '#ff0ff0');
+	this._rampCountStart = Cesium.defaultValue(options.rampCountStart, 0);
+	this._rampCountEnd = Cesium.defaultValue(options.rampCountEnd, 50);
+	this._ramp = this.generateColor( this._rampStart,this._rampEnd,this._rampCountStart,this._rampCountEnd);
+	this._points = this._viewer.scene.primitives.add( new Cesium.PointPrimitiveCollection() );
 }
 
 Object.defineProperties( MagnoMetocRadarProvider.prototype, {
@@ -349,11 +355,53 @@ MagnoMetocRadarProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 	 
 	var promise = Cesium.GeoJsonDataSource.load( url );
 	promise.then( function( dataSource ) {
+		
 		var entities = dataSource.entities.values;
 		if( (entities != null) && ( entities.length > 0 ) ){
-			console.log( url );
-			that._viewer.dataSources.add( dataSource );
 			if (that._onWhenFeaturesAcquired )  that._onWhenFeaturesAcquired( entities );
+			
+			for (var i = 0; i < entities.length; i++) {
+				var entity = entities[i];
+				if( entity.properties['getproperties'] ){
+					var properties = entity.properties['getproperties'].getValue();
+					
+					
+					if( properties.dbz_03000 ){
+						
+						// de 03000 a 12000
+						for ( var [key, value] of Object.entries( properties ) ) {
+							
+							if( key.includes("dbz_") ){
+								var markHeight = parseInt( key.substring(4, 9) );
+								var positions = entity.polygon.hierarchy.valueOf().positions;
+								var rect = Cesium.Rectangle.fromCartesianArray( positions );
+								var centerPoint = Cesium.Rectangle.center( rect );
+								var cartesian = Cesium.Cartesian3.fromRadians( centerPoint.longitude, centerPoint.latitude, markHeight ); 
+								var index = Math.round(value);
+								//if( index > 0 ){
+									if( index > that._rampCountEnd ) index = that._rampCountEnd;
+									if( index < that._rampCountStart ) index = that._rampCountStart;
+									var theColor = that._ramp[ index ];
+									
+									var colorCesium = Cesium.Color.fromCssColorString( "#"+theColor );
+									
+									that._points.add({
+									  position : cartesian,
+									  pixelSize: 0.4,
+									  color : colorCesium,
+									});
+								//}
+							}	
+						}		
+						
+					}
+					
+				}				
+				
+				
+			}	
+			
+			
 		}
 		/*
 		if( entities != null ){
@@ -418,16 +466,6 @@ MagnoMetocRadarProvider.prototype.loadFeatures = function( x, y, level, bbox ){
 };
 
 
-MagnoMetocRadarProvider.prototype.whenFeaturesAcquired = function ( entities ) {
-	/*
-    for (var i = 0; i < entities.length; i++) {
-        var entity = entities[i];
-        console.log( entity.properties.imageryData );
-    } 
-    */   
-};
-
-
 
 /**
  * Picking features is not currently supported by this imagery provider, so this function simply returns
@@ -446,5 +484,64 @@ MagnoMetocRadarProvider.prototype.whenFeaturesAcquired = function ( entities ) {
 MagnoMetocRadarProvider.prototype.pickFeatures = function (x, y, level, longitude, latitude) {
     return undefined;
 };
+
+
+MagnoMetocRadarProvider.prototype.hex = function(c) {
+  var s = "0123456789abcdef";
+  var i = parseInt (c);
+  if (i == 0 || isNaN (c))
+    return "00";
+  i = Math.round (Math.min (Math.max (0, i), 255));
+  return s.charAt ((i - i % 16) / 16) + s.charAt (i % 16);
+}
+
+/* Convert an RGB triplet to a hex string */
+MagnoMetocRadarProvider.prototype.convertToHex = function (rgb) {
+  return this.hex(rgb[0]) + this.hex(rgb[1]) + this.hex(rgb[2]);
+}
+
+/* Remove '#' in color hex string */
+MagnoMetocRadarProvider.prototype.trim = function(s) { return (s.charAt(0) == '#') ? s.substring(1, 7) : s }
+
+/* Convert a hex string to an RGB triplet */
+MagnoMetocRadarProvider.prototype.convertToRGB = function(hex) {
+  var color = [];
+  color[0] = parseInt ((this.trim(hex)).substring (0, 2), 16);
+  color[1] = parseInt ((this.trim(hex)).substring (2, 4), 16);
+  color[2] = parseInt ((this.trim(hex)).substring (4, 6), 16);
+  return color;
+}
+
+MagnoMetocRadarProvider.prototype.generateColor = function(colorStart,colorEnd,colorCountStart, colorCountEnd){
+
+	// The beginning of your gradient
+	var start = this.convertToRGB (colorStart);    
+
+	// The end of your gradient
+	var end   = this.convertToRGB (colorEnd);    
+
+	// The number of colors to compute
+	var len = Math.abs(colorCountStart) + Math.abs(colorCountEnd);
+
+	//Alpha blending amount
+	var alpha = 0.0;
+
+	var saida = [];
+	
+	for (i = colorCountStart; i <= colorCountEnd; i++) {
+		var c = [];
+		alpha += (1.0/len);
+		
+		c[0] = start[0] * alpha + (1 - alpha) * end[0];
+		c[1] = start[1] * alpha + (1 - alpha) * end[1];
+		c[2] = start[2] * alpha + (1 - alpha) * end[2];
+
+		saida[i] = this.convertToHex (c);
+	}
+	
+	return saida;
+	
+}
+
 
 
